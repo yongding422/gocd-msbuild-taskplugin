@@ -1,21 +1,22 @@
 package com.go.plugin.task.msbuild;
 
-import com.thoughtworks.go.plugin.api.response.execution.ExecutionResult;
-import com.thoughtworks.go.plugin.api.task.*;
-import com.thoughtworks.go.plugin.api.task.Console;
-import org.apache.commons.lang3.StringUtils;
+import org.apache.commons.lang.StringUtils;
 import org.apache.commons.io.FilenameUtils;
+
+import com.go.plugin.task.msbuild.Result;
+import com.go.plugin.task.msbuild.Config;
+import com.go.plugin.task.msbuild.Context;
+import com.thoughtworks.go.plugin.api.task.*;
 
 import java.io.*;
 import java.util.*;
 
-public class MSBuildTaskExecutor implements TaskExecutor {
+public class MSBuildTaskExecutor {
 
-    @Override
-    public ExecutionResult execute(TaskConfig taskConfig, TaskExecutionContext taskExecutionContext) {
-        ProcessBuilder msbuild = createMSBuildCommand(taskExecutionContext, taskConfig);
+	public Result execute(Config config, Context context, JobConsoleLogger console) {
+		
+        ProcessBuilder msbuild = createMSBuildCommand(context, config);
 
-        Console console = taskExecutionContext.console();
         console.printLine("---------------------------------------------------------------------------------------");
         console.printLine("|                         Starting MS Build Task                                      |");
         console.printLine("---------------------------------------------------------------------------------------");
@@ -31,25 +32,25 @@ public class MSBuildTaskExecutor implements TaskExecutor {
             process.destroy();
 
             if (exitCode != 0) {
-                return ExecutionResult.failure("Build Failure");
+                return new Result(false,"Build Failure");
             }
         }
         catch(Exception e) {
             console.printLine(e.getMessage());
-            return ExecutionResult.failure("Fail: Exception while running MSBuild task ", e);
+            return new Result(false,"Fail: Exception while running MSBuild task.\n" + e.getMessage());
         }
         
-        return ExecutionResult.success("Build Success");
+        return new Result(true,"Build Success");
     }
 
-    ProcessBuilder createMSBuildCommand(TaskExecutionContext taskContext, TaskConfig taskConfig) {
+    ProcessBuilder createMSBuildCommand(Context taskContext, Config taskConfig) {
 
         List<String> command = new ArrayList<String>();
 
         String msBuildPath = "C:\\Windows\\Microsoft.NET\\Framework\\v4.0.30319\\MSBuild.exe";
-        String customizeMSBuildPath = taskConfig.getValue(MSBuildTask.CUSTOMIZEMSBUILDPATH);
+        String customizeMSBuildPath = taskConfig.getCustomizeMSBuildPath();
         if(customizeMSBuildPath != null && customizeMSBuildPath.equals("true")) {
-        	msBuildPath = taskConfig.getValue(MSBuildTask.MSBUILDPATH);
+        	msBuildPath = taskConfig.getMSBuildPath();
         }
         command.add(msBuildPath);
         
@@ -58,24 +59,24 @@ public class MSBuildTaskExecutor implements TaskExecutor {
         AddProjectFile(taskConfig, command);
 
         ProcessBuilder processBuilder = new ProcessBuilder(command);
-        processBuilder.directory(new File(taskContext.workingDir()));
+        processBuilder.directory(new File(taskContext.getWorkingDir()));
         
         return processBuilder;
     }
 
-    private void AddProjectFile(TaskConfig taskConfig, List<String> command) {
+    private void AddProjectFile(Config taskConfig, List<String> command) {
     	//Prepend "working directory" containing solution file. Default value: "."
-    	String workingDirectory = taskConfig.getValue(MSBuildTask.WORKINGDIRECTORY);
+    	String workingDirectory = taskConfig.getWorkingDirectory();
     	if(workingDirectory == null || workingDirectory.isEmpty()) {
     		workingDirectory = ".";
     	}
-    	String solutionFile = taskConfig.getValue(MSBuildTask.SOLUTIONFILE);
+    	String solutionFile = taskConfig.getSolutionFile();
     	
         command.add(FilenameUtils.concat(workingDirectory, solutionFile));
     }
 
-    private void AddMSBuildArguments(TaskConfig taskConfig, List<String> command) {
-        String rawProperties = taskConfig.getValue(MSBuildTask.PROPERTIES);
+    private void AddMSBuildArguments(Config taskConfig, List<String> command) {
+        String rawProperties = taskConfig.getProperties();
         if(rawProperties != null && !StringUtils.isEmpty(rawProperties)) {
         	String properties[] = rawProperties.split("[\r\n]+"); //split props by line
         	for(String prop : properties){
@@ -84,45 +85,45 @@ public class MSBuildTaskExecutor implements TaskExecutor {
         	}
         }
         
-        String verbosity = taskConfig.getValue(MSBuildTask.VERBOSITY);
+        String verbosity = taskConfig.getVerbosity();
         if(verbosity != null && !StringUtils.isEmpty(verbosity)) {
         	command.add("/verbosity:" + verbosity);
         } else {
         	command.add("/verbosity:normal");
         }
         
-        String specifyTargets = taskConfig.getValue(MSBuildTask.SPECIFYTARGETS);
+        String specifyTargets = taskConfig.getSpecifyTargets();
         if(specifyTargets != null && specifyTargets.equals("true")) {
-        	String targets = taskConfig.getValue(MSBuildTask.TARGETS);
+        	String targets = taskConfig.getTargets();
         	if(targets != null &&  !StringUtils.isEmpty(targets)) {
         		targets = targets.replaceAll("\\s+", "");
         		command.add("/targets:"+targets);
         	}
         }
         
-        String fileLogger = taskConfig.getValue(MSBuildTask.FILELOGGER);
+        String fileLogger = taskConfig.getFileLogger();
         if (fileLogger != null && fileLogger.equals("true")) {
             command.add("/fileLogger");
         }
         
-        String detailedSummary = taskConfig.getValue(MSBuildTask.DETAILEDSUMMARY);
+        String detailedSummary = taskConfig.getDetailedSummary();
         if (detailedSummary != null && detailedSummary.equals("true")) {
             command.add("/detailedsummary");
         }
         
-        String noLogo = taskConfig.getValue(MSBuildTask.NOLOGO);
+        String noLogo = taskConfig.getNoLogo();
         if (noLogo != null && noLogo.equals("true")) {
             command.add("/nologo");
         }
         
-        String noAutoResponse = taskConfig.getValue(MSBuildTask.NOAUTORESPONSE);
+        String noAutoResponse = taskConfig.getNoAutoResponse();
         if (noAutoResponse != null && noAutoResponse.equals("true")) {
             command.add("/noautoResponse");
         }
     }
     
-    private void AddAdditionalParameters(TaskConfig taskConfig, List<String> command) {
-    	String additionalParams = taskConfig.getValue(MSBuildTask.ADDITIONALPARAMETERS);
+    private void AddAdditionalParameters(Config taskConfig, List<String> command) {
+    	String additionalParams = taskConfig.getAdditionalParameters();
     	if(additionalParams == null || additionalParams.isEmpty()) {
     		return;
     	}
